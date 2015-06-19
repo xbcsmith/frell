@@ -1,0 +1,21 @@
+{
+    "test": [
+        {
+            "action": "create",
+            "tags": [
+                "foo",
+                "bar"
+            ],
+            "values": [
+                {
+                    "key": "fuz",
+                    "value": "buz"
+                },
+                {
+                    "key": "faz",
+                    "value": "baz"
+                }
+            ]
+        }
+    ]
+}

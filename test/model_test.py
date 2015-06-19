@@ -12,6 +12,7 @@ data = { 'test' : [
 
 test = Test()
 
+modeltest = TestModel()
+
 import epdb;epdb.st()
 
-test.update(**data)

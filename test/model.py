@@ -1,34 +1,81 @@
+import json
+
+class Model(object):
+    _model = { 'model' : None }
+    _json_data = None
+
+    def __init__(self, json_data=None):
+        if json_data and isinstance(self.json_data, basestring):
+            json_data = json.loads(self.json_data)
+        else:
+            json_data = json.loads(str(self._model))   
+        self._json_data = json_data
+ 
+    def __getattr__(self, key):
+        if key in self._json_data:
+            if isinstance(self._json_data[key], (list, dict)):
+                return Model(self._json_data[key])
+            else:
+                return self._json_data[key]
+        else:
+            raise Exception('There is no _json_data[\'{key}\'].'.format(key=key))
+ 
+    def __repr__(self):
+        out = self.__dict__
+        return '%r' % (out['_json_data'])
+
+    def update(self, json_data):
+        if isinstance(json_data, basestring):
+            json_data = json.loads(json_data)
+        self._json_data = json_data
+
 class AbstractModel(object):
-    _model = {}
+
+    _json = None
 
     def __init__(self):
-        self._update()
+        if self._json:
+            self.load()
 
-    @classmethod
-    def _str(cls, obj):
-        if isinstance(obj, unicode):
-            return obj.encode('ascii')
-        if isinstance(obj, list):
-            return [ cls._str(x) for x in obj ]
-        if isinstance(obj, dict):
-            return dict((cls._str(x), cls._str(y))
-                for (x, y) in obj.items())
-        return obj
+    def _update(self, data):
+        for k, v in data.iteritems():
+            if isinstance(v, (list, tuple)):
+                    setattr(self, k, [AbstractModel(x) if isinstance(x, dict) 
+                                else x for x in v])
+            else:
+                setattr(self, k, AbstractModel(v) if isinstance(v, dict) else v)
 
-    def _update(self):
-        self.__dict__.update(self._str(self._model))
-        return self
+    def __getitem__(self, val): 
+        return self.__dict__[val]
 
-    def update(self, **kwargs):
-        self._update(kwargs)
+    def load(self):
+        with open(self._json, 'r') as stream:
+            data = json.load(stream)
+        self._update(data)       
 
+    def update(self, data):
+        self._update(data)
 
 class Test(AbstractModel):
-    _model = { 'test' : [
-                { 'action' : None, 
-                  'tags'  : [],
-                  'values' : [{'key' : None, 'value' : None}],
-                },
-                ],
+
+    _json = 'test.json'
+
+class TestModel(Model):
+
+    _model =  {
+                "Test": [
+                    {
+                        "action": "create",
+                        "tags": [
+                            None
+                        ],
+                        "values": [
+                            {
+                                "key": None,
+                                "value": None
+                            }
+                        ]
+                    }
+                ]
             }
 
