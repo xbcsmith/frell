@@ -6,7 +6,7 @@ class AbstractModel(object):
             setattr(self, s, self._handle(s, kwargs.pop(s, None)))
 
     @classmethod
-    def update(cls, data):
+    def update(cls, **data):
         for s in cls.__slots__:
             setattr(cls, s, cls._handle(s, data.pop(s, None)))
 
