@@ -1,0 +1,9 @@
+#!/usr/bin/python
+import sys
+
+with open(sys.argv[1], 'r') as f:
+    data = f.read()
+import ast
+import json
+print json.dumps(ast.literal_eval(data), sort_keys=True, indent=4, separators=(',', ': '))
+

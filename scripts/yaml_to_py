@@ -1,0 +1,10 @@
+#!/usr/bin/python
+
+import yaml
+import pprint
+import sys
+
+with open(sys.argv[1], 'r') as stream:
+    test = yaml.load(stream)
+
+pprint.pprint(test)

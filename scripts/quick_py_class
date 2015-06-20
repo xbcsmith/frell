@@ -1,0 +1,199 @@
+#!/usr/bin/env python
+
+import os
+import sys
+
+base = """
+#
+# Copyright (c) 2015 Brett Smith <xbcsmith@gmail.com>
+#
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+import os
+import sys
+
+
+
+
+logger = logging.getLogger(name = '__name__')
+
+class @MODULE@Error(Exception):
+    "Base class"
+
+class NoUpdatesFound(@MODULE@Error):
+    "Raised when no updates are available"
+
+class RepositoryError(@MODULE@Error):
+    "Raised when a repository error is caught"
+
+class Abstract@MODULE@(object):
+    def __init__(self, *args, **kwargs):
+        self._args = args
+        self._kwargs = kwargs
+
+class @MODULE@Flags(object):
+    __slots__ = [ 'migrate', 'update', 'updateall', 'sync', 'test', 'freeze' ]
+    def __init__(self, **kwargs):
+        for s in self.__slots__:
+            setattr(self, s, kwargs.pop(s, None))
+
+class @MODULE@(object):
+    def __init__(self, value=None, callback=None):
+        '''
+        Base Module Class
+        @param value: A string representing the contents of a file
+        @type value: String
+        @param callback: A callback for messaging can be None
+        @type callback: object like updatecmd.Callback
+        '''
+        self._value = None
+        self._callback = callback
+
+    def _runProcess(self, cmd):
+        '''cmd @ [ '/sbin/service', 'name', 'status' ]'''
+        try:
+            proc = subprocess.Popen(    cmd,
+                                        shell=False,
+                                        stdin=None,
+                                        stdout=subprocess.PIPE,
+                                        stderr=subprocess.PIPE
+                                    )
+            stdout, stderr = proc.communicate()
+            # TODO: Fix results up if we add serious logging...
+            #if proc.returncode != 0:
+                #raise Exception("%s failed with return code %s" %
+                #            (' '.join(cmd), proc.returncode))
+                #return stderr.decode("UTF8")
+            return stdout.decode("UTF8")
+        except Exception, ex:
+            logger.error("%s failed: %s" %
+                            (' '.join(cmd), str(ex)))
+            return str(ex)
+
+    def storeInFile(self, data, fileName):
+        '''
+        Writes data to the specified file
+        overwrites the specified file if file exists.
+        @param data: Text to be stored in file
+        @type data: string
+        @param filename: name of file to which to write the data
+        @type filename: string
+        '''
+        import tempfile, stat
+
+        if os.path.exists(fileName):
+            fileMode = stat.S_IMODE(os.stat(fileName)[stat.ST_MODE])
+        else:
+            fileMode = 0644
+
+        dirName = os.path.dirname(fileName)
+        fd, tmpName = tempfile.mkstemp(prefix='stored', dir=dirName)
+        try:
+            f = os.fdopen(fd, 'w')
+            f.write(str(data))
+            os.chmod(tmpName, fileMode)
+            os.rename(tmpName, fileName)
+        except Exception, e:
+            #FIXME
+            return Exception, str(e)
+        return True, fileName
+
+    def readStoredFile(self, fileName):
+        '''
+        Read a stored file and return its contents in a string
+        @param fileName: Name of the file to read
+        @type fileName: string
+        '''
+        blob = ""
+        try:
+            with open(fileName) as f:
+                blob = f.read()
+        except EnvironmentError, e:
+            #FIXME
+            return str(e)
+        return blob
+
+    def readStoredFileList(self, fileName):
+        '''
+        Read a stored system-model file and return its contents in a list
+        @param fileName: Name of the file to read
+        @type fileName: string
+        '''
+        data = []
+        try:
+            with open(fileName) as f:
+                data = f.readlines()
+        except EnvironmentError, e:
+            #FIXME
+            return [ EnvironmentError, str(e) ]
+        return data
+
+    def debug(self):
+        epdb.st()
+        return
+
+
+if __name__ == '__main__':
+    import sys
+
+    fileName = sys.argv[1]
+    try:
+        with open(fileName) as f:
+            blob=f.read()
+    except EnvironmentError:
+        print 'oops'
+
+    obj = @MODULE@(blob)
+    obj.debug()
+
+"""
+
+
+def storeInFile(data, fileName):
+    import tempfile, stat
+
+    if os.path.exists(fileName):
+        fileMode = stat.S_IMODE(os.stat(fileName)[stat.ST_MODE])
+    else:
+        fileMode = 0644
+    dirName = os.path.dirname(fileName)
+    fd, tmpName = tempfile.mkstemp(prefix='stored', dir=dirName)
+    try:
+        f = os.fdopen(fd, 'w')
+        f.write(str(data))
+        os.chmod(tmpName, fileMode)
+        os.rename(tmpName, fileName)
+    except Exception, e:
+        #FIXME
+        return Exception, str(e)
+    return True, fileName
+
+
+
+
+if __name__ == '__main__':
+    retval = False
+    if len(sys.argv) == 3:
+        className = sys.argv[1]
+        fileName = sys.argv[2]
+        module = base.replace('@MODULE@', className)
+        retval, filename = storeInFile(module, fileName)
+    else:
+        print "usage: %s ClassName  PathToFile" % sys.argv[0]
+
+    if retval:
+        print "Created base class in %s" % fileName
+    else:
+        print "FAILED"

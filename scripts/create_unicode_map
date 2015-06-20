@@ -1,0 +1,8 @@
+#!/bin/bash
+
+export JAVA_LIB="/usr/share/java"
+
+for i in *.ttf;
+    do
+        java -cp "${JAVA_LIB}/*"  org.apache.fop.fonts.apps.TTFReader ${i}  ${i//ttf/xml}
+    done

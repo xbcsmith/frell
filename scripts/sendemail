@@ -1,0 +1,52 @@
+#!/usr/bin/python
+
+import sys
+
+import smtplib
+
+# Here are the email package modules we'll need
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+
+def sendIt(sender, recipients, subject, body, attachments):
+    # Create the container (outer) email message.
+    msg = MIMEMultipart()
+    msg['Subject'] = subject
+    msg['From'] = sender
+    msg['To'] = ', '.join(recipients)
+    msg.preamble = body
+
+    for f in attachments:
+        # Open the files in binary mode.  Let the MIMEImage class automatically
+        # guess the specific image type.
+        fp = open(f, 'rb')
+        attachment = MIMEText(fp.read())
+        fp.close()
+        msg.attach(attachment)
+
+    # Send the email via our own SMTP server.
+    s = smtplib.SMTP('localhost')
+    s.sendmail(sender, recipients, msg.as_string())
+    s.quit()
+    return 0
+
+
+def usage(args):
+    print >>sys.stderr, 'usage: %s <attachment> <attachment> ... ' % args[0]
+    return 1
+
+
+def main(args):
+
+    if not len(args) > 1:
+        return usage(args)
+        
+    sender = 'bc.smith@sas.com'
+    recipients = [ 'james.daniels@sas.com' ]
+    subject = 'Sending Files From Python'
+    body = 'This is how you do it'
+    attachments = args[1:]
+    sendIt(sender, recipients, subject, body, attachments)
+
+if __name__ == '__main__':
+    sys.exit(main(sys.argv))

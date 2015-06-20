@@ -1,0 +1,29 @@
+#!/bin/bash
+
+BRANCH=$1
+
+git pull
+
+git ls-remote
+
+EXISTS=$(git ls-remote | grep ${BRANCH}) 
+
+[[ -n $EXISTS ]] && echo "${BRANCH} exists" &&  exit 1 
+
+echo "Continue?"
+
+read answer
+case $answer in
+    yes ) echo "Making branch ${BRANCH}"
+        ;;
+    * ) exit 0
+        ;;
+esac
+
+git branch ${BRANCH}
+
+git checkout ${BRANCH}
+
+git push --set-upstream origin ${BRANCH}
+
+git ls-remote

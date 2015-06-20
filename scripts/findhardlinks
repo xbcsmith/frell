@@ -1,0 +1,13 @@
+#!/bin/sh
+xPATH=$(readlink -f -- "${1}")
+for xFILE in "${xPATH}"/*; do
+    [ -d "${xFILE}" ] && continue
+    [ ! -r "${xFILE}" ] && printf '"%s" is not readable.\n' "${xFILE}" 1>&2 && continue
+    nLINKS=$(stat -c%h "${xFILE}")
+    if [ ${nLINKS} -gt 1 ]; then
+        iNODE=$(stat -c%i "${xFILE}")
+        xDEVICE=$(stat -c%m "${xFILE}")
+        printf '\nItem: %s[%d] = %s\n' "${xDEVICE}" "${iNODE}" "${xFILE}";
+        find "${xDEVICE}" -inum ${iNODE} -not -path "${xFILE}" -printf '     -> %p\n' 2>/dev/null
+    fi
+done
