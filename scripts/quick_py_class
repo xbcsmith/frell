@@ -21,6 +21,7 @@ base = """
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
+
 import os
 import sys
 
@@ -28,6 +29,36 @@ import sys
 
 
 logger = logging.getLogger(name = '__name__')
+
+def setupLogging(level=3, logfile=None):
+
+    levels = {  3  : logging.DEBUG,
+                0  : logging.ERROR,
+                1  : logging.INFO,
+                2  : logging.WARN
+            }
+
+    logger = logging.getLogger('depot')
+    logger.setLevel(levels.get(level))
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    if logfile:
+        fh = logging.FileHandler('%s-%s.log' % (logfile, time.time()))
+        fh.setLevel(levels.get(level))
+        fh.setFormatter(formatter)
+        logger.addHandler(fh)
+    ch = logging.StreamHandler()
+    ch.setLevel(levels.get(level))
+    ch.setFormatter(formatter)
+    logger.addHandler(ch)
+    return logger
+
+def debugExceptHook(type, value, tb):
+    import traceback
+    import epdb
+    print "T-Rex Hates %s" % type.__name__
+    print str(type)
+    traceback.print_exception(type, value, tb)
+    epdb.post_mortem(tb)
 
 class @MODULE@Error(Exception):
     "Base class"
@@ -148,15 +179,51 @@ class @MODULE@(object):
 if __name__ == '__main__':
     import sys
 
-    fileName = sys.argv[1]
+    from optparse import OptionParser
+
+    _usage = (  'usage: %prog <path> -d <dir> \n' )
+
+    # Populate our options
+    parser = OptionParser(version="%prog 0.0.1", usage=_usage)
+    parser.add_option("-o", "--logfile", dest="logfile",
+                      help="write log to FILE", metavar="FILE")
+    parser.add_option('-v', '--verbose', dest='verbose', action='count', default=0,
+                    help="Increase verbosity (specify multiple times for more)")
+    parser.add_option('-d', '--dir', dest='dirs', action='store', default='tmp',
+                    help="Specify directory to store outputs in")
+    parser.add_option('--true', dest='bool', action='store_true', default=False,
+                    help="True False flag")
+    parser.add_option('--debug', dest='debug', action='store_true', default=False,
+                    help="Increased Logging for troubleshooting")
+    # Parse the arguments (defaults to parsing sys.argv).
+    opts, args = parser.parse_args()
+
+    if not args:
+        import sys
+        print >> sys.stderr, _usage
+        sys.exit(1)
+
+    verbose = opts.verbose
+    logfile = opts.logfile
+    dirs = opts.dirs
+    filename = args[0]
+
+    if opts.debug:
+        verbose = 3
+        sys.excepthook = debugExceptHook
+
+    logger = setupLogging(verbose, logfile)
+
     try:
-        with open(fileName) as f:
+        with open(filename) as f:
             blob=f.read()
     except EnvironmentError:
         print 'oops'
 
     obj = @MODULE@(blob)
     obj.debug()
+
+
 
 """
 

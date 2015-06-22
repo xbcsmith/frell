@@ -1,81 +1,142 @@
-import json
+import logging
 
-class Model(object):
-    _model = { 'model' : None }
-    _json_data = None
+log = logging.getLogger()
+logging.basicConfig(level=logging.DEBUG)
 
-    def __init__(self, json_data=None):
-        if json_data and isinstance(self.json_data, basestring):
-            json_data = json.loads(self.json_data)
+import collections
+
+class Model(collections.MutableMapping):
+
+    model = {}
+    validate = {}
+
+    def __init__(self, *args, **kwargs):
+        self.__dict__.update(self.model)
+        self.update(dict(*args, **kwargs)) 
+
+    def __getitem__(self, key):
+        log.debug("Calling __getitem__ for %s", key)
+        return self.__dict__[key]
+
+    def __setitem__(self, key, value):
+        log.debug("Calling __setitem__ for %s", value)
+        if key in self.model:
+            self.__dict__[key] = self.__validate__(key, value)
         else:
-            json_data = json.loads(str(self._model))   
-        self._json_data = json_data
- 
-    def __getattr__(self, key):
-        if key in self._json_data:
-            if isinstance(self._json_data[key], (list, dict)):
-                return Model(self._json_data[key])
-            else:
-                return self._json_data[key]
-        else:
-            raise Exception('There is no _json_data[\'{key}\'].'.format(key=key))
- 
+            self.__dict__[key] = value
+
+    def __delitem__(self, key):
+        del self.__dict__[key]
+
+    def __iter__(self):
+        return iter(self.__dict__)
+
+    def __len__(self):
+        return len(self.__dict__)
+
+    def __str__(self):
+        return str(self.__dict__)
+
     def __repr__(self):
-        out = self.__dict__
-        return '%r' % (out['_json_data'])
+        return '{0}, Model({1})'.format(super(Model, self).__repr__(),
+                                  self.__dict__)
 
-    def update(self, json_data):
-        if isinstance(json_data, basestring):
-            json_data = json.loads(json_data)
-        self._json_data = json_data
+    def items(self):
+        return self.model.keys()
 
-class AbstractModel(object):
+    def __validate__(self, key, value):
+        valid = self.validate.get(key) or []
+        if len(valid):
+            try:
+                assert value in valid
+                return value
+            except Exception, e:
+                raise KeyError, e
+        else:
+            return value
 
-    _json = None
+    def asJSON(self):
+        json = {}
+        for x, y in self.__dict__.iteritems():
+            if not x.startswith('_'):
+                if isinstance(y, basestring):
+                    json[x] = y
+                elif isinstance(y, (list, tuple)):
+                    json[x] = [ z.asJSON() if isinstance(z, collections.MutableMapping) else z for z in y]
+                elif isinstance(y, collections.MutableMapping):
+                    json[x] = y.asJSON()
+                else:
+                    json[x] = y
+        return str(json).replace("'", '"')
 
-    def __init__(self):
-        if self._json:
-            self.load()
 
-    def _update(self, data):
-        for k, v in data.iteritems():
-            if isinstance(v, (list, tuple)):
-                    setattr(self, k, [AbstractModel(x) if isinstance(x, dict) 
-                                else x for x in v])
-            else:
-                setattr(self, k, AbstractModel(v) if isinstance(v, dict) else v)
+class Value(Model):
+    model = { 'key' : '' , 'value' : '' }
 
-    def __getitem__(self, val): 
-        return self.__dict__[val]
+class Tag(Model):
+    validate = { 'tag' : [ 'symlink',
+                'registry_key',
+                'user',
+                'group',
+                'directory',
+                'file',
+                'permissions'
+                ]}
+    model = { 'tag': '' }
 
-    def load(self):
-        with open(self._json, 'r') as stream:
-            data = json.load(stream)
-        self._update(data)       
+class Action(Model):
+    validate = { 'action' : [ 'create', 'delete', 'modify' ] }
+    model = { 'action' : '' , 'tag' : '' , 'values' : [] }
 
-    def update(self, data):
-        self._update(data)
+class ActionValues(Value):
+    validate = { 'key' : [ 'file', 'regkey', 'user', 'group', 'mode', 'symlink' ] }
 
-class Test(AbstractModel):
 
-    _json = 'test.json'
-
-class TestModel(Model):
-
-    _model =  {
-                "Test": [
-                    {
-                        "action": "create",
-                        "tags": [
-                            None
-                        ],
-                        "values": [
-                            {
-                                "key": None,
-                                "value": None
-                            }
-                        ]
-                    }
-                ]
+class File(Model):
+    model = {
+                'group': 'default',
+                'md5': None,
+                'mode': '0755',
+                'name': None,
+                'owner': 'default',
+                'type': None
             }
+
+class Source(Model):
+    model = {   'archive': None,
+                'destination': None,
+                'files': [],
+                'source': None
+            }
+
+
+class Changelog(Model):
+    model = {   'date': None,
+                'entry': None,
+                'msg': None,
+                'user': None
+            }
+
+class Package(Model):
+    validate = { 'platform' : [ 'lax', 'wx6', 'prt' ] }
+    model = {
+                 'buildrequires': [],
+                 'changelog': [],
+                 'description': '',
+                 'lang': None, # en
+                 'name': None,
+                 'platform': None,
+                 'platform_id': None,
+                 'postinstall': [],
+                 'preinstall': [],
+                 'provides': [],
+                 'release': None,
+                 'requires': [],
+                 'sources': [],
+                 'version': None
+        }
+
+
+
+
 
