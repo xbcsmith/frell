@@ -1,0 +1,63 @@
+buildrequires: []
+changelog: []
+description: Frelling Test Example
+lang: en
+name: frell
+platform: linux
+platform_id: null
+postinstall:
+- action: create
+  tag:
+    tag: symlink
+  values:
+  - key: symlink
+    value: /opt/bin/frell
+  - key: file
+    value: /opt/bin/frell.test
+preinstall: []
+provides: []
+release: 1.EL.test
+requires: test-requires
+sources:
+- archive: frell-0.0.1.zip
+  destination: /opt/frell
+  files:
+  - group: default
+    md5: null
+    mode: '0644'
+    name: /lib/frell/model.py
+    owner: default
+    type: file
+  - group: default
+    md5: null
+    mode: '0644'
+    name: /lib/frell/converter.py
+    owner: default
+    type: file
+  - group: default
+    md5: null
+    mode: '0644'
+    name: /lib/model.py
+    owner: default
+    type: file
+  - group: default
+    md5: null
+    mode: '0644'
+    name: /share/frell/docs/README.md
+    owner: default
+    type: file
+  - group: default
+    md5: null
+    mode: '0644'
+    name: /frell.conf
+    owner: default
+    type: file
+  - group: default
+    md5: null
+    mode: '0755'
+    name: /bin/frell
+    owner: default
+    type: file
+  source: git://testing
+version: 0.0.1
+

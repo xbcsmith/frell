@@ -1,5 +1,9 @@
+import logging
+
+log = logging.getLogger()
+logging.basicConfig(level=logging.DEBUG)
+
 import collections
-import json
 
 class Model(collections.MutableMapping):
 
@@ -11,9 +15,11 @@ class Model(collections.MutableMapping):
         self.update(dict(*args, **kwargs)) 
 
     def __getitem__(self, key):
+        log.debug("Calling __getitem__ for %s", key)
         return self.__dict__[key]
 
     def __setitem__(self, key, value):
+        log.debug("Calling __setitem__ for %s", value)
         if key in self.model:
             self.__dict__[key] = self.__validate__(key, value)
         else:
@@ -49,22 +55,19 @@ class Model(collections.MutableMapping):
         else:
             return value
 
-    def _expanded(self):
-        pd = {}
+    def asJSON(self):
+        json = {}
         for x, y in self.__dict__.iteritems():
             if not x.startswith('_'):
                 if isinstance(y, basestring):
-                    pd[x] = y
+                    json[x] = y
                 elif isinstance(y, (list, tuple)):
-                    pd[x] = [ z._expanded() if isinstance(z, collections.MutableMapping) else z for z in y]
+                    json[x] = [ z.asJSON() if isinstance(z, collections.MutableMapping) else z for z in y]
                 elif isinstance(y, collections.MutableMapping):
-                    pd[x] = y._expanded()
+                    json[x] = y.asJSON()
                 else:
-                    pd[x] = y
-        return pd
-
-    def asJSON(self):
-        return json.dumps(self._expanded())
+                    json[x] = y
+        return str(json).replace("'", '"')
 
 
 class Value(Model):
@@ -115,7 +118,7 @@ class Changelog(Model):
             }
 
 class Package(Model):
-    validate = { 'platform' : [ 'linux', 'wx64', 'unk' ] }
+    validate = { 'platform' : [ 'linux', 'win64', 'unkown' ] }
     model = {
                  'buildrequires': [],
                  'changelog': [],
@@ -133,8 +136,7 @@ class Package(Model):
                  'version': None
         }
 
-    @property
-    def nvr(self):
-        return '%s-%s-%s' % (self.name, self.version, self.release)
+
+
 
 
