@@ -14,7 +14,8 @@ echo "Module : $MODULE"
 mkdir -p $MODULE
 
 for f in constants.py main.py __init__.py;do
-    cat .src/$LIC .src/$f > $MODULE/$f
+    cat ./src/$LIC ./src/$f > $MODULE/$f
+    sed -i "s/@NAME@/${NAME}/g" $MODULE/$f
     sed -i "s/@MODULE@/${MODULE}/g" $MODULE/$f
 done
 
@@ -22,6 +23,8 @@ for d in docs scripts;do
     mkdir -p $d
     echo "${d^} go here" > $d/README
 done
+
+mkdir -p ./docs/manpages
 
 for f in Makefile Make.rules Make.defs setup.py;do
     cp -v ./src/$f  $f
@@ -37,6 +40,8 @@ done
 cat ./src/$LICENSE > LICENSE
 
 cp -v ./src/gitignore .gitignore
+
+echo "# REQUIREMENTS GO HERE" > requirements.txt
 
 mkdir -p ./${MODULE}_tests
 

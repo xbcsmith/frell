@@ -39,7 +39,7 @@ setup(
     name="@NAME@",
     version=imp.load_source("@MODULE@.constants",
                             "@MODULE@/constants.py").get_version(),
-    description="Python access to maven",
+    description="Python module @MODULE@",
     author="Brett Smith",
     author_email="bc.smith@sas.com",
     license="Apache License 2.0",
