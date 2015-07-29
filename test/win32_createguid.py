@@ -1,0 +1,1 @@
+python -c "import pythoncom; print pythoncom.CreateGuid()"

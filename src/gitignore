@@ -1,3 +1,6 @@
 *.pyc
 *.swp
+*.log
+*.zip
+_test_*
 .DS_Store
