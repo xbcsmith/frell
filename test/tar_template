@@ -1,0 +1,72 @@
+{%- macro render_symlink(vals) -%}
+{%- set paths = { 'symlink' : None, 'file' : None } -%}
+{%- for val in vals -%}
+{%- if val.key == 'symlink' -%}
+    {%- if paths.update(symlink=val.value) %}
+    {%- endif -%}
+{%- endif -%}
+{%- if val.key == 'file' -%}
+    {% if paths.update(file=val.value) %}
+    {%- endif -%}
+{%- endif -%}
+{%- endfor -%}
+{% if paths.symlink and paths.file -%}
+ln -sf {{ paths.file }} {{ paths.symlink }}
+{%- endif -%}
+{%- endmacro -%}
+#!/bin/bash
+set -x -v
+
+NAME="{{ data.name }}"
+VERSION="{{ data.version }}"
+RELEASE="{{ data.release }}"
+LICENSE="{{ data.license }}"
+URL="{{ data.url }}"
+{% for source in data.sources -%}
+SOURCE{{ data.sources.index(source) }}="{{ source.archive }}"
+{% endfor -%}
+
+
+DESCRIPTION="{{ data.description }}"
+
+WORK_DIR=$(pwd)
+BUILD_DIR="${WORK_DIR}/tarfile"
+BUILD_ROOT="${BUILD_DIR}/${NAME}-${VERSION}"
+
+
+#PREP
+mkdir -p $BUILD_DIR
+cd $BUILD_DIR
+rm -rf $BUILD_ROOT
+mkdir -p $BUILD_ROOT
+cd $BUILD_ROOT
+
+{% for source in data.sources -%}
+{%- if source.destination %}
+mkdir -p .{{ source.destination }}
+cd .{{ source.destination }}
+{% endif -%}
+{%- if source.archive %}
+unzip ${WORK_DIR}/${SOURCE{{ data.sources.index(source) }}}
+{% endif -%}
+{%- if source.destination %}
+cd ${BUILD_ROOT}
+{% endif -%}
+{% endfor -%}
+
+
+{% if data.postinstall %}
+{%- for post in data.postinstall|sort %}
+{%- if post.action == 'create' and post.tag.tag == 'symlink' %}
+{{ render_symlink(post.get('values')) }}
+{% endif %}
+{% endfor -%}
+{% endif %}
+
+
+#PACKAGE
+cd $BUILD_DIR
+tar -zcvf $WORK_DIR/${NAME}-${VERSION}-${RELEASE}.tar.gz *
+
+#CLEAN
+rm -rf $BUILD_DIR

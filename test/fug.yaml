@@ -1,0 +1,14 @@
+name: fug
+version: 0.0.1
+release: 0.1-test
+description: Work in progress
+package: tar
+sources:
+    - archive: foo-0.0.1-1.sp0.test.zip
+      destination: /opt/fug-utils
+    - archive: bar-0.0.1-1.sp0.test.zip
+      destination: /opt/fug-utils    
+    - archive: buz-0.0.1-1.sp0.test.zip
+      destination: /opt/fug-utils
+
+
