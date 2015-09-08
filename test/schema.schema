@@ -1,0 +1,125 @@
+---
+id: http://somewhere.com/package-rpm-schema#
+$schema: http://json-schema.org/draft-04/schema#
+description: default rpm schema for onepm package yaml
+type: object
+properties:
+    buildrequires:
+        type: array
+        items: {type: string}
+    changelog:
+        type: object
+        properties:
+            date:
+                type: string
+                format: date-time
+            entry:
+                type: integer
+                minimum: 1
+            msg:
+                type: string
+            user:
+                type: string
+                format: email
+        additionalProperties: False
+        required: [date, entry, msg, user]
+    description:
+        type: string
+    lang:
+        type: string
+    license:
+        type: string
+    name:
+        type: string
+    package:
+        type: [string, "null"]
+        enum: [rpm]
+    platform:
+        type: [string, "null"]
+        enum: [linux, windows]
+    platform_id:
+        type: [string, "null"]
+    postinstall:
+        type: array
+        items: {$ref: '#/definitions/actions'}
+    prefix:
+        type: string
+    preinstall:
+        type: array
+        items: {$ref: '#/definitions/actions'}
+    release:
+        type: string
+    requires:
+        type: array
+        items: {type: string}
+    sources:
+        type: array
+        items: {$ref: '#/definitions/source'}
+    url:
+        type: string
+        format: url
+    version:
+        type: string
+definitions:
+    actions:
+        type: object
+        properties:
+            action: {enum: [create, delete, modify]}
+            tag: {$ref: '#/definitions/tag'}
+            values:
+                type: array
+                items: {$ref: '#/definitions/action_value'}
+        additionalProperties: false
+        required: [action, tag, values]
+    tag:
+        type: object
+        properties:
+            tag:
+                enum: [symlink, registry_key, user, group, directory, file, permission]
+        additionalProperties: false
+        required: [tag]
+    action_value:
+        type: object
+        properties:
+            key: {enum: [file, regkey, user, uid, group, gid, mode, symlink]}
+            value: {type: string}
+        additionalProperties: false
+        required: [key, value]
+    source:
+        type: object
+        properties:
+            archive:
+                type: string
+                format: url
+            destination:
+                type: string
+            files:
+                type: array
+                items: {$ref: '#/definitions/file'}
+            source:
+                type: string
+                format: url
+            sha256sum:
+                    type: [string, "null"]
+                    pattern: ^[A-Fa-f0-9]{64}$
+        additionalProperties: false
+        required: [archive, destination, files, source]
+    file:
+        type: object
+        properties:
+            group:
+                type: string
+            sha1:
+                 type: [string, "null"]
+                 pattern: ^[A-Fa-f0-9]{40}
+            mode:
+                type: string
+                pattern: ^[0-8]{4}$
+            name:
+                type: string
+            owner:
+                type: string
+            type:
+                type: string
+        additionalProperties: false
+        required: [group, mode, name, owner, sha1, type]
