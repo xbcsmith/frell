@@ -20,14 +20,28 @@ import collections
 
 class Model(collections.MutableMapping):
 
+    _marker = object()
+
     def __init__(self, *args, **kwargs):
         self.update(dict(*args, **kwargs))
 
-    def __getitem__(self, key):
-        return self.__dict__[key]
-
     def __setitem__(self, key, value):
-        self.__dict__[key] = value
+        if isinstance(value, (list, tuple)):
+            value = [ Model(**z) if isinstance(z, dict)
+                                                else z for z in value ]
+        elif isinstance(value, dict) and not isinstance(value, Model):
+            value = Model(**value)
+        self.__dict__[key] =  value
+
+    def __getitem__(self, key):
+        result = self.get(key, self._marker)
+        if result is self._marker:
+            result = Model()
+            super(Model, self).__setitem__(self, key, result)
+        return result
+
+    __setattr__ = __setitem__
+    __getattr__ = __getitem__
 
     def __delitem__(self, key):
         del self.__dict__[key]
@@ -44,23 +58,21 @@ class Model(collections.MutableMapping):
     def __repr__(self):
         return '{0}, Model({1})'.format(super(Model, self).__repr__(),
                                   self.__dict__)
-    def set(self, key, value):
-        self.__setitem__(key, value)
 
-    def _expanded(self):
+    def serialize(self):
         pd = {}
         for x, y in self.__dict__.iteritems():
             if not x.startswith('_'):
                 if isinstance(y, basestring):
                     pd[x] = y
                 elif isinstance(y, dict):
-                    pd[x] = dict((k, v._expanded()) if isinstance(v, Model)
+                    pd[x] = dict((k, v.serialize()) if isinstance(v, Model)
                                         else (k,v) for k, v in y.iteritems())
                 elif isinstance(y, (list, tuple)):
-                    pd[x] = [ z._expanded() if isinstance(z, Model)
+                    pd[x] = [ z.serialize() if isinstance(z, Model)
                                         else z for z in y ]
                 elif isinstance(y, Model):
-                    pd[x] = y._expanded()
+                    pd[x] = y.serialize()
                 else:
                     pd[x] = y
         return pd
@@ -89,60 +101,3 @@ class Model(collections.MutableMapping):
                 if not svalue:
                     setattr(self, key, value)
 
-
-class Package(Model):
-
-    @property
-    def nvr(self):
-        return '%s-%s-%s' % (self.name, self.version, self.release)
-
-    @classmethod
-    def fromDict(cls, args):
-        assert isinstance(args, dict), "Requires a dict"
-
-        def _handle_objects(value):
-            if isinstance(value, basestring):
-                return value
-            elif isinstance(value, (list, tuple)):
-                return  [ _handle_objects(z) if not isinstance(z, Model)
-                                            else z for z in value ]
-            elif isinstance(value, dict):
-                return dict((k, _handle_objects(v)) if not isinstance(v, Model)
-                                            else (k,v) for k, v in value.iteritems())
-            elif isinstance(value, Model) or value is None:
-                return value
-            else:
-                return Model(value)
-
-        def _handle_list(value):
-            new = []
-            for z in value:
-                if isinstance(z, dict):
-                   new.append(_handle_objects(z))
-                if isinstance(z, (list, tuple)):
-                    new.append(_handle_objects(z))
-                else:
-                    new.append(z)
-            return new
-
-        def _handle_dict(value):
-            new = {}
-            for k, v in value.iteritems():
-                if isinstance(v, dict):
-                    new[k] =  _handle_objects(v)
-                if isinstance(v, (list, tuple)):
-                    new[k] = _handle_objects(v)
-                else:
-                    new[k] = v
-            return new
-
-        new = {}
-        for key, value in args.iteritems():
-            if isinstance(value, dict):
-                new[key] = _handle_dict(value)
-            elif isinstance(value, (list, tuple)):
-                new[key] = _handle_list(value)
-            else:
-                new[key] = value
-
-        return cls(**new)
