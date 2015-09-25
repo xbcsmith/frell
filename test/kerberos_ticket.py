@@ -28,6 +28,8 @@ class KerberosTicket:
 
 '''And an example of using it with requests
 
+http://python-notes.curiousefficiency.org/en/latest/python_kerberos.html
+
 >>> krb = KerberosTicket("HTTP@krbhost.example.com")
 >>> headers = {"Authorization": krb.auth_header}
 >>> r = requests.get("https://krbhost.example.com/krb/", headers=headers)
