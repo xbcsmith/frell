@@ -1,0 +1,319 @@
+#!/usr/bin/env python
+import sys
+import os
+import re
+import subprocess
+import traceback
+import pdb
+import rpm
+import shutil
+import shlex
+from collections import namedtuple
+import argparse
+
+
+def debug_except_hook(type, value, tb):
+    print("T-Rex Hates {0}".format(type.__name__))
+    print(str(type))
+    traceback.print_exception(type, value, tb)
+    pdb.post_mortem(tb)
+
+
+def makedirs(dirName):
+    if os.path.isdir(dirName):
+        return dirName
+    try:
+        os.makedirs(dirName, mode=0o755)
+    except OSError as e:
+        if e.errno != 17:
+            raise
+    return dirName
+
+
+MAKEFILE = """
+name = %(name)s
+version = %(version)s
+
+
+prep:
+%(prep)s
+
+build:
+%(build)s
+
+install:
+%(install)s
+
+clean:
+%(clean)s
+
+"""
+
+
+class NEVRA(namedtuple('NEVRA', 'name epoch version release arch')):
+    _re = re.compile("^(.*)-([^-]*)-([^-]*)\.([^.]*)$")
+
+    @classmethod
+    def fromHeader(cls, header):
+        args = []
+        for tag in [rpm.RPMTAG_NAME, rpm.RPMTAG_EPOCH,
+                    rpm.RPMTAG_VERSION, rpm.RPMTAG_RELEASE, rpm.RPMTAG_ARCH]:
+            if tag in header.keys():
+                if isinstance(header[tag], (list, tuple)):
+                    args.append(''.join([str(x) for x in header[tag]]))
+                else:
+                    args.append(header[tag])
+            else:
+                args.append(None)
+        return cls(*args)
+
+    @classmethod
+    def parse(cls, filename):
+        """
+        Given an rpm filename like name-version-release.arch.rpm or
+        name-epoch:version-release-arch.rpm (or the previous without .rpm), return
+        (name, epoch, version, release, arch)
+        """
+        if filename.endswith('.rpm'):
+            filename = filename[:-4]
+        m = cls._re.match(filename)
+        if not m:
+            return None
+        n, v, r, a = m.groups()
+        if ':' not in v:
+            return cls(n, None, v, r, a)
+        e, v = v.split(':', 1)
+        e = int(e)
+        return cls(n, e, v, r, a)
+
+    @classmethod
+    def filename(cls, name, epoch, version, release, arch):
+        if epoch is not None:
+            version = "%s:%s" % (epoch, version)
+        return "%s-%s-%s.%s.rpm" % (name, version, release, arch)
+
+    def as_string(self):
+        if self.epoch is not None:
+            version = "%s_%s" % (self.epoch, self.version)
+        else:
+            version = self.version
+        return "%s-%s-%s.%s" % (self.name, version, self.release, self.arch)
+
+    def as_dict(self):
+        epoch = self.epoch or '0'
+        nevra = {'name': self.name,
+                 'epoch': epoch,
+                 'version': self.version,
+                 'release': self.release,
+                 'arch': self.arch,
+                 }
+        return nevra
+
+    def __str__(self):
+        if self.epoch:
+            epoch = '%s:' % self.epoch
+        else:
+            epoch = ''
+        return '%s-%s%s-%s.%s' % (self.name, epoch, self.version, self.release,
+                                  self.arch)
+
+
+def run_process(cmd):
+    '''cmd @ [ '/sbin/service', 'name', 'status' ]'''
+    try:
+        proc = subprocess.Popen(cmd,
+                                shell=False,
+                                stdin=None,
+                                stdout=subprocess.PIPE,
+                                stderr=subprocess.PIPE
+                                )
+        stdout, stderr = proc.communicate()
+        if proc.returncode != 0:
+            raise Exception(stdout, stderr)
+        else:
+            return {'stdout': stdout, 'stderr': stderr}
+    except Exception as ex:
+        print("%s failed: %s" %
+              (' '.join(cmd), str(ex)))
+        return {'stdout': None, 'stderr': str(ex)}
+
+
+def get_payload(path, dest, wrkdir=None):
+    if not wrkdir:
+        wrkdir = os.getcwd()
+    cmd = ['rpm2cpio', path]
+
+    p1 = subprocess.Popen(
+        cmd,
+        stdout=subprocess.PIPE,
+        cwd=wrkdir
+    )
+    p2 = subprocess.Popen(['cpio', '-idmv'], stdin=p1.stdout, cwd=dest)
+    p1.stdout.close()  # remove ourselves from between git and tar
+    p1.wait()
+    p2.wait()
+    if p1.returncode:
+        raise RuntimeError("rpm2cpio exited with status %s" % p1.returncode)
+    if p2.returncode:
+        raise RuntimeError("cpio exited with status %s" % p1.returncode)
+
+
+def unpack_rpm(path, dst, subdir=False, use_short_name=False):
+    """
+    mkdir ${RPM//.rpm}
+    cd ${RPM//.rpm}
+    rpm2cpio ../$RPM  | cpio -idmv
+    cd ..
+    """
+    assert(path.endswith('.rpm'))
+    filename = os.path.basename(path)
+    nevra = NEVRA.parse(filename)
+    dest = os.path.abspath(dst)
+    if subdir is True:
+        destdir = nevra.as_string()
+        if use_short_name:
+            destdir = nevra.name
+        dest = os.path.join(dst, destdir)
+    makedirs(dest)
+    get_payload(filename, dest)
+    return dest
+
+
+def fix_paths(command, nvra):
+    new = []
+    for seg in shlex.split(command):
+        if nvra in seg:
+            print('Found nevra : %s' % nvra)
+            nsec = []
+            for sec in seg.split(nvra):
+                if sec.endswith('BUILDROOT/'):
+                    sec = '$(BUILDDIR)'
+                nsec.append(sec)
+            path = ''.join(nsec)
+            new.append(path)
+        elif 'SOURCES' in seg:
+            print('Found SOURCES')
+            nsec = []
+            for sec in seg.split('SOURCES'):
+                if sec.endswith('/'):
+                    sec = '$(SRCDIR)'
+                nsec.append(sec)
+            path = ''.join(nsec)
+            new.append(path)
+        else:
+            new.append(seg)
+    return ' '.join(new)
+
+
+def convert_spec(path):
+    packages = {}
+    uri = os.path.abspath(os.path.dirname(path))
+    spec = rpm.spec(path)
+    sources = [os.path.basename(x[0]) for x in spec.sources]
+    sources = [os.path.join(uri, x) for x in sources]
+    for pkg in spec.packages:
+        nevra = NEVRA.parse(pkg.header[rpm.RPMTAG_NVRA])
+        nvra = nevra.as_string()
+        prep = '\n'.join(['\t%s' % fix_paths(x, nvra)
+                          for x in spec.prep.split('\n') if x])
+        build = '\n'.join(['\t%s' % fix_paths(x, nvra)
+                           for x in spec.build.split('\n') if x])
+        install = '\n'.join(['\t%s' % fix_paths(x, nvra)
+                             for x in spec.install.split('\n') if x])
+        clean = '\n'.join(['\t%s' % fix_paths(x, nvra)
+                           for x in spec.build.split('\n') if x])
+
+        package = dict(build=build, prep=prep, install=install,
+                       clean=clean, uri=uri, sources=sources)
+        package.update(nevra.as_dict())
+        packages.setdefault(nevra, package)
+    return packages
+
+
+def create_makefile(package):
+    return MAKEFILE % package
+
+
+def create_skeleton(package, dst=None):
+    makefile = create_makefile(package)
+    nv = "%(name)s-%(version)s" % package
+    if dst:
+        destdir = os.path.join(dst, nv)
+    else:
+        destdir = nv
+    skel = makedirs(destdir)
+    src = makedirs(os.path.join(skel, 'src'))
+    makefile_path = os.path.join(skel, 'Makefile')
+    with open(makefile_path, 'w') as fh:
+        fh.write(makefile)
+    for fn in package['sources']:
+        if os.path.exists(fn):
+            shutil.copy(fn, src)
+    return skel
+
+def main():
+
+    __version__ = '0.0.1'
+    _usage = ('%(prog)s [options] -d DEST RPM_NAME [RPM_NAME ...]\n')
+    _description = ("RPM to DEB\n"
+                    "Simple implementation of rpm2deb\n"
+                    )
+    _prog = "rpm2deb"
+
+    parser = argparse.ArgumentParser(version="%(prog)s " + __version__,
+                                     description=_description,
+                                     usage=_usage,
+                                     prog=_prog
+                                     )
+
+    parser.add_argument("-d", "--dest", dest="dest", action="store",
+                        default=None,
+                        help="Specify destination directory for rpms")
+
+    parser.add_argument("--subdir", dest="subdir", action="store_true",
+                        default=False,
+                        help="Create subdirs based on nevra")
+
+    parser.add_argument("--short-name", dest="short_name", action="store_true",
+                        default=False,
+                        help="Do not include version and release in subdir")
+
+    parser.add_argument("--debug", dest="debug", action="store_true",
+                        default=False,
+                        help="debug")
+
+    parser.add_argument('rpms', nargs='+', type=str, metavar='RPM_NAME',
+                        help="foo.rpm bar.rpm etc")
+
+    args = parser.parse_args()
+
+    debug = args.debug
+    if debug:
+        sys.excepthook = debug_except_hook
+
+    destination = args.dest
+    if destination is None:
+        destination = os.getcwd()
+
+    subdir = args.subdir
+    short_name = args.short_name
+
+    results = []
+    for rpm in args.rpms:
+        results.append(
+            unpack_rpm(
+                rpm,
+                destination,
+                subdir=subdir,
+                use_short_name=short_name))
+    for result in results:
+        specs = [os.path.join(result, x)
+                 for x in os.listdir(result) if x.endswith('.spec')]
+        for spec in specs:
+            packages = convert_spec(spec)
+        for nevra, package in packages.items():
+            skeleton = create_skeleton(package)
+
+
+if __name__ == "__main__":
+    main()
